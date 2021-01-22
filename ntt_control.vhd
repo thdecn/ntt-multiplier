@@ -33,8 +33,11 @@ entity ntt_control is
     -- Inputs
     clk, rst : in std_logic;
     start : in std_logic;
+    break : in std_logic; -- pause if '1', continue if '0'
     fwd_bwd : in std_logic; -- 0: fwd, 1: bwd
     -- Outputs
+    valid : out std_logic; -- '1' when in INCREMENT_J State
+    m_plus_i_valid, h_plus_i_valid : out std_logic;
     m : out std_logic_vector(n_width-1 downto 0); -- max(m) == n
     t : out std_logic_vector(n_width-1 downto 0); -- max(t) == n
     i : out std_logic_vector(n_width-2 downto 0); -- max(i) == m/2
@@ -56,7 +59,7 @@ architecture rtl of ntt_control is
   signal V : unsigned(2*data_width-1 downto 0);
   signal h_reg, h_next : std_logic_vector(n_width-1 downto 0);
 
-  type state_type is (IDLE_STATE, INCREMENT_M, DECREMENT_M, INCREMENT_I, INCREMENT_J, SCALE_STATE, DONE_STATE);
+  type state_type is (IDLE_STATE, INCREMENT_M, DECREMENT_M, INCREMENT_I, INCREMENT_J, DONE_STATE ); --SCALE_STATE, );
   signal state_reg, state_next : state_type;
 
 begin
@@ -80,15 +83,17 @@ begin
       h_reg <= (others => '0');
       state_reg <= IDLE_STATE;
     elsif rising_edge(clk) then
-      t_reg <= t_next;
-      m_reg <= m_next;
-      i_reg <= i_next;
-      j_reg <= j_next;
-      j1_reg <= j1_next;
-      j2_reg <= j2_next;
-      S_reg <= S_next;
-      h_reg <= h_next;
-      state_reg <= state_next;
+      if break='0' then
+        t_reg <= t_next;
+        m_reg <= m_next;
+        i_reg <= i_next;
+        j_reg <= j_next;
+        j1_reg <= j1_next;
+        j2_reg <= j2_next;
+        S_reg <= S_next;
+        h_reg <= h_next;
+        state_reg <= state_next;
+      end if;
     end if;
   end process;
 
@@ -105,6 +110,9 @@ begin
     j2_next <= j2_reg;
     S_next <= S_reg;
     h_next <= h_reg;
+    valid <= '0';
+    m_plus_i_valid <= '0';
+    h_plus_i_valid <= '0';
 
     case( state_reg ) is
 
@@ -129,6 +137,7 @@ begin
 
       when INCREMENT_I =>
         if fwd_bwd='0' then
+          m_plus_i_valid <= '1';
           j1_next <= std_logic_vector(unsigned(i_reg) * unsigned(t_reg)) & '0'; -- 2 * i * t
           --j2_next <= std_logic_vector(unsigned(j1_next) + unsigned(t_reg) - 1);
           j2_next <= std_logic_vector( unsigned(std_logic_vector(unsigned(i_reg) * unsigned(t_reg)) & '0') + unsigned(t_reg) - 1);
@@ -136,6 +145,7 @@ begin
           --j_next <= j1_next;
           j_next <= std_logic_vector(unsigned(i_reg) * unsigned(t_reg)) & '0';
         elsif fwd_bwd='1' then
+          h_plus_i_valid <= '1';
           j2_next <= std_logic_vector(unsigned(j1_reg) + unsigned(t_reg) - 1);
           j_next <= j1_reg;
         end if;
@@ -143,6 +153,7 @@ begin
         state_next <= INCREMENT_J;
 
       when INCREMENT_J =>
+        valid <= '1';
         if fwd_bwd='0' then
           -- U, V, a ...
           --V <= (unsigned(S_reg)*unsigned(a_j_t) mod q);
@@ -172,7 +183,7 @@ begin
           --a_j_t_out <= std_logic_vector(V(data_width-1 downto 0));
           if j_reg=j2_reg and unsigned(i_reg)=(unsigned(h_reg)-1) and m_reg(1)='1' then
             j_next <= (others => '0');
-            state_next <= SCALE_STATE;
+            state_next <= DONE_STATE; --SCALE_STATE;
           elsif j_reg=j2_reg and unsigned(i_reg)=(unsigned(h_reg)-1) then
             m_next <= '0' & m_reg(n_width-1 downto 1);
             t_next <= t_reg(n_width-2 downto 0) & '0';
@@ -199,14 +210,14 @@ begin
         done <= '1';
         state_next <= IDLE_STATE;
 
-      when SCALE_STATE =>
-        if to_integer(unsigned(j_reg))=(n-1) then
-          state_next <= DONE_STATE;
-        else
-          --V <= (unsigned(a_j)*to_unsigned(n_inv, data_width) mod q);
-          --a_j_out <= std_logic_vector(V(data_width-1 downto 0));
-          j_next <= std_logic_vector(unsigned(j_reg) + 1);
-        end if;
+--      when SCALE_STATE =>
+--        if to_integer(unsigned(j_reg))=(n-1) then
+--          state_next <= DONE_STATE;
+--        else
+--          --V <= (unsigned(a_j)*to_unsigned(n_inv, data_width) mod q);
+--          --a_j_out <= std_logic_vector(V(data_width-1 downto 0));
+--          j_next <= std_logic_vector(unsigned(j_reg) + 1);
+--        end if;
 
       when others =>
         state_next <= IDLE_STATE;

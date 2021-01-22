@@ -136,7 +136,7 @@ begin
       wait for CLK_PERIOD;
       instruction <= "00000";
 
-      -- CMULT -- Coefficient-wise multiplication 
+      -- CMULT -- Coefficient-wise multiplication
       wait for CLK_PERIOD*20;
       instruction <= "00100";
       wait for CLK_PERIOD;
@@ -154,6 +154,12 @@ begin
       wait for CLK_PERIOD;
       instruction <= "00000";
       wait until done='1';
+
+      -- READ --
+      wait for CLK_PERIOD*20;
+      instruction <= "00010";
+      wait for CLK_PERIOD;
+      instruction <= "00000";
 
       -- BNTT -- bwdNTT
       wait for CLK_PERIOD*20;
