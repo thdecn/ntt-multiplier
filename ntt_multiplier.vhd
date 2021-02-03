@@ -1,18 +1,3 @@
--- -------------------------------------------------------------------------- --
--- Engineer: Thomas De Cnudde
---
--- Create Date: 19/01/2021
--- Design Name:
--- Module Name: ntt_multiplier
--- Project Name:
--- Description:
---
---
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
---
--- -------------------------------------------------------------------------- --
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -29,8 +14,8 @@ entity ntt_multiplier is
   port (
     -- Inputs
     clk, rst : in std_logic;
-    start : in std_logic;
-    instruction : in std_logic_vector(4 downto 0);
+    start : in std_logic; -- __TODO__ not used, delete
+    instruction : in std_logic_vector(5 downto 0);
     data_in1, data_in2 : in std_logic_vector(data_width-1 downto 0);
     -- Outputs
     data_out1, data_out2 : out std_logic_vector(data_width-1 downto 0);
@@ -138,7 +123,7 @@ architecture rtl of ntt_multiplier is
   signal n_counter_reg, n_counter_next : std_logic_vector(n_width-1 downto 0);
   signal mult_counter_reg, mult_counter_next : std_logic_vector(n_width downto 0); --__TODO__ Change width dyn
   signal break_counter_reg, break_counter_next : std_logic_vector(3 downto 0); --__TODO__ Change width dyn
-  signal a_wr_reg, a_wr_next : std_logic;
+  signal a1_wr_reg, a1_wr_next, a2_wr_reg, a2_wr_next : std_logic;
   signal a_addr_reg, a_addr_next, b_addr_reg, b_addr_next : std_logic_vector(addr-1 downto 0);
   signal a_din1, a_din2, b_dout1, b_dout2 : std_logic_vector(data_width-1 downto 0);
 
@@ -182,7 +167,7 @@ begin
   generic map(data => data_width, addr => addr)
   port map(
     a_clk => clk,
-    a_wr => a_wr_reg,
+    a_wr => a1_wr_reg,
     a_addr => a_addr_reg,
     a_din => a_din1,
     a_dout => open,
@@ -197,7 +182,7 @@ begin
   generic map(data => data_width, addr => addr)
   port map(
     a_clk => clk,
-    a_wr => a_wr_reg,
+    a_wr => a2_wr_reg,
     a_addr => a_addr_reg,
     a_din => a_din2,
     a_dout => open,
@@ -241,7 +226,8 @@ begin
     if rst='1' then
       n_counter_reg <= (others => '0');
       state_reg <= IDLE_STATE;
-      a_wr_reg <= '0';
+      a1_wr_reg <= '0';
+      a2_wr_reg <= '0';
       a_addr_reg <= (others => '0');
       b_addr_reg <= (others => '0');
       mult_in1_reg <= (others => '0');
@@ -259,7 +245,8 @@ begin
     elsif rising_edge(clk) then
       n_counter_reg <= n_counter_next;
       state_reg <= state_next;
-      a_wr_reg <= a_wr_next;
+      a1_wr_reg <= a1_wr_next;
+      a2_wr_reg <= a2_wr_next;
       a_addr_reg <= a_addr_next;
       b_addr_reg <= b_addr_next;
       mult_in1_reg <= mult_in1_next;
@@ -277,12 +264,13 @@ begin
     end if;
   end process;
 
-  FSM : process(state_reg, instruction, n_counter_reg, a_wr_reg, a_addr_reg, b_addr_reg, mult_in1_reg, mult_in2_reg, mult_counter_reg, data_in1, data_in2, mult_out, fwd_bwd_reg, ntt_done, j, t, valid, break_counter_reg, S_reg, U_reg, V_reg, add_in1_reg, add_in2_reg, add_out, sub_in1_reg, sub_in2_reg, sub_out)
+  FSM : process(state_reg, instruction, n_counter_reg, a1_wr_reg, a2_wr_reg, a_addr_reg, b_addr_reg, mult_in1_reg, mult_in2_reg, mult_counter_reg, data_in1, data_in2, mult_out, fwd_bwd_reg, ntt_done, j, t, valid, break_counter_reg, S_reg, U_reg, V_reg, add_in1_reg, add_in2_reg, add_out, sub_in1_reg, sub_in2_reg, sub_out)
   begin
     -- Default assignations to avoid latches
     state_next <= state_reg;
     n_counter_next <= n_counter_reg;
-    a_wr_next <= a_wr_reg;
+    a1_wr_next <= a1_wr_reg;
+    a2_wr_next <= a2_wr_reg;
     a_addr_next <= a_addr_reg;
     b_addr_next <= b_addr_reg;
     mult_in1_next <= mult_in1_reg;
@@ -305,23 +293,24 @@ begin
 
     case( state_reg ) is
       when IDLE_STATE =>
-        if instruction="00001" then
+        if instruction(4 downto 0)="00001" then -- LOAD
           n_counter_next <= (others => '0');
-          a_wr_next <= '1';
+          a1_wr_next <= '1';
+          a2_wr_next <= '1';
           a_addr_next <= (others => '0');
           state_next <= LOAD_STATE;
-        elsif instruction="00010" then
+        elsif instruction(4 downto 0)="00010" then -- READ
           n_counter_next <= (others => '0');
           b_addr_next <= (others => '0');
           state_next <= READ_STATE;
-        elsif instruction="00100" then
+        elsif instruction(4 downto 0)="00100" then
           mult_counter_next <= (others => '0');
           b_addr_next <= (others => '0');
           state_next <= CMULT_STATE;
-        elsif instruction="01000" then
+        elsif instruction(4 downto 0)="01000" then
           state_next <= FNTT_STATE;
           fwd_bwd_next <= '0';
-        elsif instruction="10000" then
+        elsif instruction(4 downto 0)="10000" then
           state_next <= BNTT_STATE;
           fwd_bwd_next <= '1';
         end if;
@@ -331,11 +320,13 @@ begin
         a_din2 <= data_in2;
         if to_integer(unsigned(n_counter_reg))=n-1 then
           state_next <= DONE_STATE;
-          a_wr_next <= '0';
+          a1_wr_next <= '0';
+          a2_wr_next <= '0';
           a_addr_next <= (others => '0');
         else
           n_counter_next <= std_logic_vector(unsigned(n_counter_reg) + 1);
-          a_wr_next <= '1';
+          a1_wr_next <= '1';
+          a2_wr_next <= '1';
           a_addr_next <= std_logic_vector(unsigned(a_addr_reg) + 1);
         end if;
 
@@ -343,28 +334,48 @@ begin
         if to_integer(unsigned(mult_counter_reg))=n-1+1+1+1 then -- +1 for mult input regs, +1 for mult regs + 1 for write to ram
           state_next <= DONE_STATE;
           b_addr_next <= (others => '0');
-          a_wr_next <= '0';
+          if instruction(5)='1' then
+            a2_wr_next <= '0';
+            a_din2 <= mult_out;
+          else
+            a1_wr_next <= '0';
+            a_din1 <= mult_out;
+          end if;
           a_addr_next <= (others => '0');
-          a_din1 <= mult_out;
-          a_din2 <= (others => '0');
         elsif to_integer(unsigned(mult_counter_reg))>=n-1 then
           mult_counter_next <= std_logic_vector(unsigned(mult_counter_reg) + 1);
           b_addr_next <= (others => '0');
           mult_in1_next <= b_dout1;
           mult_in2_next <= b_dout2;
-          a_wr_next <= '1';
+          if instruction(5)='1' then
+            -- write to ram b
+            a2_wr_next <= '1';
+            a_din2 <= mult_out;
+          else
+            -- write to ram a
+            a1_wr_next <= '1';
+            a_din1 <= mult_out;
+          end if;
           a_addr_next <= std_logic_vector(unsigned(a_addr_reg) + 1);
-          a_din1 <= mult_out;
-          a_din2 <= (others => '0');
         else
           if to_integer(unsigned(b_addr_reg))=1+1 then
-            a_wr_next <= '1';
+            if instruction(5)='1' then
+              -- write to ram b
+              a2_wr_next <= '1';
+            else
+              -- write to ram a
+              a1_wr_next <= '1';
+            end if;
             a_addr_next <= (others => '0');
           elsif to_integer(unsigned(b_addr_reg))>1+1 then
-            a_wr_next <= '1';
+            if instruction(5)='1' then
+              a2_wr_next <= '1';
+              a_din2 <= mult_out;
+            else
+              a1_wr_next <= '1';
+              a_din1 <= mult_out;
+            end if;
             a_addr_next <= std_logic_vector(unsigned(a_addr_reg) + 1);
-            a_din1 <= mult_out;
-            a_din2 <= (others => '0');
           end if;
           mult_counter_next <= std_logic_vector(unsigned(mult_counter_reg) + 1);
           b_addr_next <= std_logic_vector(unsigned(b_addr_reg) + 1);
@@ -391,10 +402,18 @@ begin
                 b_addr_next <= std_logic_vector(to_unsigned(to_integer(unsigned(j)), addr));
               elsif to_integer(unsigned(break_counter_reg))=3 then
                 -- __TODO__ Reset b_addr?
-                mult_in1_next <= b_dout1;
+                if instruction(5)='1' then
+                  mult_in1_next <= b_dout2;
+                else
+                  mult_in1_next <= b_dout1;
+                end if;
                 mult_in2_next <= S_reg; -- __TODO__ S_reg can probably go ...
               elsif to_integer(unsigned(break_counter_reg))=4 then
-                U_next <= b_dout1;
+                if instruction(5)='1' then
+                  U_next <= b_dout2;
+                else
+                  U_next <= b_dout1;
+                end if;
               elsif to_integer(unsigned(break_counter_reg))=5 then
                 -- mult_out ready, Butterfly operation
                 add_in1_next <= U_reg;
@@ -403,20 +422,32 @@ begin
                 sub_in2_next <= mult_out;
               elsif to_integer(unsigned(break_counter_reg))=7 then
                 -- Prepare Store a[j] <= add_out
-                a_wr_next <= '1';
+                if instruction(5)='1' then
+                  a2_wr_next <= '1';
+                else
+                  a1_wr_next <= '1';
+                end if;
                 a_addr_next <= j(addr-1 downto 0);
               elsif to_integer(unsigned(break_counter_reg))=8 then
                 -- Store a[j] <= add_out
                 -- Prepare Store a[j+t] <= sub_out
-                a_wr_next <= '1';
+                if instruction(5)='1' then
+                  a2_wr_next <= '1';
+                  a_din2 <= add_out;
+                else
+                  a1_wr_next <= '1';
+                  a_din1 <= add_out;
+                end if;
                 a_addr_next <= std_logic_vector(to_unsigned(to_integer(unsigned(j))+to_integer(unsigned(t)), addr));
-                a_din1 <= add_out;
-                a_din2 <= (others => '0');
               elsif to_integer(unsigned(break_counter_reg))=9 then
                 -- Store a[j+t] <= sub_out
-                a_wr_next <= '0';
-                a_din1 <= sub_out;
-                a_din2 <= (others => '0');
+                if instruction(5)='1' then
+                  a2_wr_next <= '0';
+                  a_din2 <= sub_out;
+                else
+                  a1_wr_next <= '0';
+                  a_din1 <= sub_out;
+                end if;
               end if;
             end if;
           end if;
@@ -443,38 +474,63 @@ begin
               elsif to_integer(unsigned(break_counter_reg))=1 then
                 b_addr_next <= std_logic_vector(to_unsigned(to_integer(unsigned(j))+to_integer(unsigned(t)), addr));
               elsif to_integer(unsigned(break_counter_reg))=2 then
-                U_next <= b_dout1;
+                if instruction(5)='1' then
+                  U_next <= b_dout2;
+                else
+                  U_next <= b_dout1;
+                end if;
               elsif to_integer(unsigned(break_counter_reg))=3 then
                 -- Add U + b_dout1
                 add_in1_next <= U_reg; -- __TODO REGs store the same data in both NTTs, can be collapsed...
-                add_in2_next <= b_dout1;
                 sub_in1_next <= U_reg;
-                sub_in2_next <= b_dout1;
+                if instruction(5)='1' then
+                  add_in2_next <= b_dout2;
+                  sub_in2_next <= b_dout2;
+                else
+                  add_in2_next <= b_dout1;
+                  sub_in2_next <= b_dout1;
+                end if;
               elsif to_integer(unsigned(break_counter_reg))=4 then
                 -- Addition & Subtraction Inputs Registered
                 -- Prepare Store a[j] <= add_out
-                a_wr_next <= '1';
+                if instruction(5)='1' then
+                  a2_wr_next <= '1';
+                else
+                  a1_wr_next <= '1';
+                end if;
                 a_addr_next <= j(addr-1 downto 0);
               elsif to_integer(unsigned(break_counter_reg))=5 then
                 -- Addition & Subtraction Ready
                 -- Store a[j] <= add_out
-                a_wr_next <= '0';
-                a_din1 <= add_out;
-                a_din2 <= (others => '0');
+                if instruction(5)='1' then
+                  a2_wr_next <= '0';
+                  a_din2 <= add_out;
+                else
+                  a1_wr_next <= '0';
+                  a_din1 <= add_out;
+                end if;
                 -- Send Subtraction Result to Multiplier
                 mult_in1_next <= sub_out;
                 mult_in2_next <= S_reg; -- __TODO__ S_reg can probably go ...
               elsif to_integer(unsigned(break_counter_reg))=6 then
                 -- Multiplier Inputs Registered
                 -- Prepare Store a[j+t] <= mult_out
-                a_wr_next <= '1';
+                if instruction(5)='1' then
+                  a2_wr_next <= '1';
+                else
+                  a1_wr_next <= '1';
+                end if;
                 a_addr_next <= std_logic_vector(to_unsigned(to_integer(unsigned(j))+to_integer(unsigned(t)), addr));
               elsif to_integer(unsigned(break_counter_reg))=7 then
                 -- Multiplication Ready
                 -- Store a[j+t] <= mult_out
-                a_wr_next <= '0';
-                a_din1 <= mult_out;
-                a_din2 <= (others => '0');
+                if instruction(5)='1' then
+                  a2_wr_next <= '0';
+                  a_din2 <= mult_out;
+                else
+                  a1_wr_next <= '0';
+                  a_din1 <= mult_out;
+                end if;
               end if;
             end if;
           end if;
@@ -484,32 +540,53 @@ begin
         if to_integer(unsigned(mult_counter_reg))=n-1+1+1+1 then -- +1 for mult input regs, +1 for mult regs + 1 for write to ram
           state_next <= DONE_STATE;
           b_addr_next <= (others => '0');
-          a_wr_next <= '0';
           a_addr_next <= (others => '0');
-          a_din1 <= mult_out;
-          a_din2 <= (others => '0');
+          if instruction(5)='1' then
+            a2_wr_next <= '0';
+            a_din2 <= mult_out;
+          else
+            a1_wr_next <= '0';
+            a_din1 <= mult_out;
+          end if;
         elsif to_integer(unsigned(mult_counter_reg))>=n-1 then
           mult_counter_next <= std_logic_vector(unsigned(mult_counter_reg) + 1);
           b_addr_next <= (others => '0');
-          mult_in1_next <= b_dout1;
+          if instruction(5)='1' then
+            a2_wr_next <= '1';
+            a_din2 <= mult_out;
+            mult_in1_next <= b_dout2;
+          else
+            a1_wr_next <= '1';
+            a_din1 <= mult_out;
+            mult_in1_next <= b_dout1;
+          end if;
           mult_in2_next <= std_logic_vector(to_unsigned(n_inv, data_width));
-          a_wr_next <= '1';
           a_addr_next <= std_logic_vector(unsigned(a_addr_reg) + 1);
-          a_din1 <= mult_out;
-          a_din2 <= (others => '0');
         else
           if to_integer(unsigned(b_addr_reg))=1+1 then
-            a_wr_next <= '1';
+            if instruction(5)='1' then
+              a2_wr_next <= '1';
+            else
+              a1_wr_next <= '1';
+            end if;
             a_addr_next <= (others => '0');
           elsif to_integer(unsigned(b_addr_reg))>1+1 then
-            a_wr_next <= '1';
             a_addr_next <= std_logic_vector(unsigned(a_addr_reg) + 1);
-            a_din1 <= mult_out;
-            a_din2 <= (others => '0');
+            if instruction(5)='1' then
+              a2_wr_next <= '1';
+              a_din2 <= mult_out;
+            else
+              a1_wr_next <= '1';
+              a_din1 <= mult_out;
+            end if;
           end if;
           mult_counter_next <= std_logic_vector(unsigned(mult_counter_reg) + 1);
           b_addr_next <= std_logic_vector(unsigned(b_addr_reg) + 1);
-          mult_in1_next <= b_dout1;
+          if instruction(5)='1' then
+            mult_in1_next <= b_dout2;
+          else
+            mult_in1_next <= b_dout1;
+          end if;
           mult_in2_next <= std_logic_vector(to_unsigned(n_inv, data_width));
         end if;
 
