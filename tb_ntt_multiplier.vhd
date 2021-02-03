@@ -47,7 +47,7 @@ architecture behavior of tb_ntt_multiplier is
       -- Inputs
       clk, rst : in std_logic;
       start : in std_logic;
-      instruction : in std_logic_vector(4 downto 0);
+      instruction : in std_logic_vector(5 downto 0);
       data_in1, data_in2 : in std_logic_vector(data_width-1 downto 0);
       -- Outputs
       data_out1, data_out2 : out std_logic_vector(data_width-1 downto 0);
@@ -58,7 +58,7 @@ architecture behavior of tb_ntt_multiplier is
   --Inputs
   signal clk, rst : std_logic := '0';
   signal start : std_logic := '0';
-  signal instruction : std_logic_vector(4 downto 0);
+  signal instruction : std_logic_vector(5 downto 0);
   signal data_in1, data_in2 : std_logic_vector(data_width-1 downto 0);
   --Outputs
   signal data_out1, data_out2 : std_logic_vector(data_width-1 downto 0);
@@ -89,7 +89,7 @@ begin
       data_in1 <= (others => '0');
       data_in2 <= (others => '0');
       start <= '0';
-      instruction <= "00000";
+      instruction <= "000000";
       rst <= '0';
       wait for CLK_PERIOD*10;
       rst <= '1';
@@ -98,9 +98,9 @@ begin
       wait for CLK_PERIOD*10;
 
       -- LOAD --
-      instruction <= "00001";
+      instruction <= "000001";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
 
       -- a = np.array([4,1,4,2,1,3,5,6])
       -- b = np.array([6,1,8,0,3,3,9,8])
@@ -132,47 +132,73 @@ begin
 --  __TODO__  wait until done='1';
       -- READ --
       wait for CLK_PERIOD*20;
-      instruction <= "00010";
+      instruction <= "000010";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
 
       -- CMULT -- Coefficient-wise multiplication
       wait for CLK_PERIOD*20;
-      instruction <= "00100";
+      instruction <= "000100";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
 
       -- READ --
       wait for CLK_PERIOD*20;
-      instruction <= "00010";
+      instruction <= "000010";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
 
-      -- FNTT -- fwdNTT
+      -- FNTT -- fwdNTT(a)
       wait for CLK_PERIOD*20;
-      instruction <= "01000";
+      instruction <= "001000";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
       wait until done='1';
 
       -- READ --
       wait for CLK_PERIOD*20;
-      instruction <= "00010";
+      instruction <= "000010";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
 
-      -- BNTT -- bwdNTT
+      -- BNTT -- bwdNTT(a)
       wait for CLK_PERIOD*20;
-      instruction <= "10000";
+      instruction <= "010000";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
       wait until done='1';
 
       -- READ --
       wait for CLK_PERIOD*20;
-      instruction <= "00010";
+      instruction <= "000010";
       wait for CLK_PERIOD;
-      instruction <= "00000";
+      instruction <= "000000";
+
+      -- FNTT -- fwdNTT(b)
+      wait for CLK_PERIOD*20;
+      instruction <= "101000";
+      wait for CLK_PERIOD;
+      instruction <= "100000";
+      wait until done='1';
+
+      -- READ --
+      wait for CLK_PERIOD*20;
+      instruction <= "000010";
+      wait for CLK_PERIOD;
+      instruction <= "000000";
+
+      -- BNTT -- bwdNTT(b)
+      wait for CLK_PERIOD*20;
+      instruction <= "110000";
+      wait for CLK_PERIOD;
+      instruction <= "100000";
+      wait until done='1';
+
+      -- READ --
+      wait for CLK_PERIOD*20;
+      instruction <= "000010";
+      wait for CLK_PERIOD;
+      instruction <= "000000";
 
       wait for CLK_PERIOD*20;
       wait for CLK_PERIOD*20;
